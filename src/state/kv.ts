@@ -2,6 +2,7 @@ import type { IIIClient } from 'iii-sdk'
 import { withKeyedLock } from './keyed-mutex.js'
 import { resolveGraphScope, notifyGraphGenerationChange } from './graph-generation.js'
 import { ensureGraphConsistency, noteGraphSnapshotWrite } from './graph-consistency.js'
+import { withGraphIndexMutation, withGraphSnapshotIndexBarrier, withGraphSnapshotUnknownMutation } from './graph-retrieval-index.js'
 
 export type StateBackend = 'file' | 'redis'
 
@@ -126,6 +127,7 @@ export class StateKV {
     scope: string,
     key: string,
     operation: (resolvedScope: string) => Promise<T>,
+    knownValue?: { value: unknown },
   ): Promise<T> {
     scope = await resolveGraphScope(this, scope)
     await ensureGraphConsistency(this, scope)
@@ -137,9 +139,14 @@ export class StateKV {
         noteGraphSnapshotWrite(this, scope, key)
       }
     }
-    const result = this.backend === 'redis'
-      ? await withKeyedLock(`state-update:${scope}\u0000${key}`, write)
-      : await write()
+    const orderedWrite = () => this.backend === 'redis'
+      ? withKeyedLock(`state-update:${scope}\u0000${key}`, write)
+      : write()
+    const result = await withGraphIndexMutation(this, scope, key, () =>
+      knownValue
+        ? withGraphSnapshotIndexBarrier(this, scope, key, knownValue.value, orderedWrite)
+        : withGraphSnapshotUnknownMutation(this, scope, key, orderedWrite),
+    )
     await notifyGraphGenerationChange(this, scope, key)
     return result
   }
@@ -150,6 +157,7 @@ export class StateKV {
         function_id: 'state::set',
         payload: { scope: resolvedScope, key, value },
       }),
+      { value },
     )
   }
 

@@ -105,6 +105,7 @@ const ALL_TOOLS_COUNT = getAllTools().length;
 const CORE_TOOLS_COUNT = getAllTools().filter((t) => ESSENTIAL_TOOLS.has(t.name)).length;
 import { resolveDataDir } from "./cli-data-dir.js";
 import { runCaptureCommand } from "./cli/capture.js";
+import { runCompressionCommand } from "./cli/compression.js";
 import { runGraphIndexCommand } from "./cli/graph-index.js";
 import { bearerHeaders, resolveClientSecret } from "./secret-store.js";
 
@@ -240,6 +241,10 @@ Commands:
   capture [--drain]  Show capture health: the local offline spool and the server
                      inbox (pending, retrying, dead letters). --drain sends
                      spooled observations now. --json for machine output.
+  compression        Inspect pending or failed observation compression.
+                     --session <id> or --project <name> selects the scope.
+                     --agent-id <id> narrows it; --limit <N> bounds the batch.
+                     --retry explicitly retries compression; --json for machine output.
   graph-index       Inspect bounded graph index status. --json for machine output.
                      migrate --allow-legacy-scan explicitly scans legacy graph data.
                      resume continues a sealed migration without another full scan.
@@ -306,7 +311,7 @@ if (toolsIdx !== -1 && args[toolsIdx + 1]) {
   process.env["AGENTMEMORY_TOOLS"] = toolsMode;
 }
 
-const URL_CLIENT_COMMANDS = new Set(["status", "doctor", "mcp", "capture", "graph-index"]);
+const URL_CLIENT_COMMANDS = new Set(["status", "doctor", "mcp", "capture", "compression", "graph-index"]);
 let hasExplicitLocalPortOverride = false;
 let selectedInstance = 0;
 
@@ -4234,6 +4239,16 @@ async function runCapture(): Promise<void> {
   process.exit(code);
 }
 
+async function runCompression(): Promise<void> {
+  const base = getBaseUrl();
+  const code = await runCompressionCommand({
+    base,
+    args: args.slice(1),
+    secret: resolveClientSecret(base),
+  });
+  process.exit(code);
+}
+
 async function runGraphIndex(): Promise<void> {
   const base = getBaseUrl();
   process.exit(await runGraphIndexCommand({ base, args: args.slice(1), secret: resolveClientSecret(base) }));
@@ -4252,6 +4267,7 @@ const commands: Record<string, () => Promise<void>> = {
   mcp: runMcp,
   "import-jsonl": runImportJsonl,
   capture: runCapture,
+  compression: runCompression,
   "graph-index": runGraphIndex,
 };
 

@@ -57,6 +57,8 @@ import { isValidEventId } from "../capture/event-id.js";
 import { getCaptureController, type CaptureResult } from "../functions/capture.js";
 import { withoutObservationSource } from "../functions/observation-source.js";
 import { clearSessionFinalize, scheduleSessionFinalize } from "../functions/session-finalize.js";
+import { requestSummaryRefresh } from "../functions/summary-state.js";
+import { registerCompressionApi } from "./compression.js";
 import {
   getFinalizeIdleMs,
   isGraphExtractionEnabled,
@@ -938,6 +940,24 @@ export function registerApiTriggers(
     },
   });
 
+  registerCompressionApi(sdk, secret);
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::compression-status",
+    config: {
+      http_method: "GET",
+      api_path: "/agentmemory/compression",
+    },
+  });
+  sdk.registerTrigger({
+    type: "http",
+    function_id: "api::compression-retry",
+    config: {
+      http_method: "POST",
+      api_path: "/agentmemory/compression/retry",
+    },
+  });
+
   sdk.registerFunction("api::compress-file", 
     async (req: HttpRequest<{ filePath: string }>): Promise<Response> => {
       const authErr = checkAuth(req, secret);
@@ -1175,6 +1195,7 @@ export function registerApiTriggers(
         if (!session || session.id !== sessionId) return "not_found" as const;
         if (session.status === "completed") return "already_completed" as const;
 
+        await requestSummaryRefresh(kv, sessionId);
         await kv.update(KV.sessions, sessionId, [
           { type: "set", path: "endedAt", value: new Date().toISOString() },
           { type: "set", path: "status", value: "completed" },

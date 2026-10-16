@@ -82,6 +82,14 @@ export interface ObservationSource {
   payload?: unknown;
 }
 
+export interface ObservationCompression {
+  status: "pending" | "failed" | "complete";
+  revision: string;
+  attempts: number;
+  lastAttemptAt?: string;
+  error?: "dispatch_failed" | "compression_failed" | "parse_failed" | "validation_failed" | "source_unavailable";
+}
+
 export interface CompressedObservation {
   id: string;
   sessionId: string;
@@ -104,6 +112,7 @@ export interface CompressedObservation {
   origin?: Origin;
   captureKey?: string;
   compressedAt?: string;
+  compression?: ObservationCompression;
 }
 
 export type ObservationType =
@@ -148,6 +157,15 @@ export interface Memory {
   origin?: Origin;
 }
 
+export interface SessionSummaryRepair {
+  sessionId: string;
+  token: string;
+  dueAt: number;
+  attempts: number;
+  compressionCursor?: string;
+  lastError?: "pending" | "no_provider" | "summary_failed" | "compression_pending" | "source_unavailable" | "recovery_failed";
+}
+
 export interface SessionSummary {
   sessionId: string;
   project: string;
@@ -159,6 +177,7 @@ export interface SessionSummary {
   concepts: string[];
   observationCount: number;
   coveredThrough?: string;
+  coveredFingerprint?: string;
 }
 
 export type HookType =
